@@ -1,34 +1,42 @@
 import type { HttpContextContract } from '@ioc:Adonis/Core/HttpContext'
- import { schema } from '@ioc:Adonis/Core/Validator'
- import User from 'App/Models/User'
- import Database from '@ioc:Adonis/Lucid/Database'
-
+import User from 'App/Models/user'
+import Event from '@ioc:Adonis/Core/Event'
+import userValid from 'App/Validators/CreateUserValidator'
+ 
 export default class AuthController {
-  public async registration({request , auth}:HttpContextContract){
-   
-    const newUserSchema = schema.create({
-        email: schema.string()
-      })
-    const data = await request.validate({schema:newUserSchema})
-    const user = await User.create(data)
-    await auth.login(user)
-    return await Database
-    .query()  
-    .from('users')
-    .select('*')
-    
+    //registration function
+    public async register({request}:HttpContextContract){
+    const data  = await request.validate(userValid)
+    const newUser = await User.create(data)
+    Event.emit('new:user', {
+      newUser,
+    })
+
+    Event.emit('new::user', newUser)
+    return newUser
+
+    }
+
+    //login function
+    public async login({request ,auth , response}:HttpContextContract){
+     
+        const email = request.input('email')
+        const password = request.input('password')
+
+  try {
+     const token = await auth.attempt(email, password)
+     return token.toJSON()
+  } catch {
+    return response.unauthorized('Invalid credentials')
   }
 
-  public async login({request , response ,auth , session}:HttpContextContract){
-    const {email , password } = request.only(['email' , 'password'])
-    try {
-        await auth.attempt(email,password)
-    } catch (error) {
-       session.flash('form' , 'your username or password incorret')
-         return response
-    } 
-    return response.redirect("/")
-  }
+     
+    }
+   //auth logout
+    public async logout({ auth, response }: HttpContextContract) {
+      await auth.logout()
+      return response.status(200)
+    }
 }
 
 
